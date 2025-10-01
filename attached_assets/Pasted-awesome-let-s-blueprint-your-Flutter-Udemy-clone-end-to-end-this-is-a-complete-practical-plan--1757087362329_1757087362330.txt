@@ -1,0 +1,498 @@
+awesome — let’s blueprint your Flutter “Udemy clone” end-to-end. this is a complete, practical plan you can build from today. i’m optimizing for Flutter + Supabase, Paystack for payments (as you mentioned), and a creator/student marketplace model.
+
+# 1) product scope (mvp → v1.0)
+
+**mvp (ship in weeks):**
+
+* email/password + social auth
+* browse & search courses (categories, tags, instructor)
+* course detail (curriculum, preview, reviews)
+* enroll (free / paid via Paystack)
+* video lessons (streaming), notes, basic progress tracking
+* Q\&A (per course), ratings/reviews
+* instructor upload: create course → sections → lessons → price → publish
+* admin: approve course, feature course, refund, ban users (simple web/admin)
+
+**v1.0 extras (nice-to-have):**
+
+* coupons, wishlists, gift codes
+* offline lesson download (DRM-lite)
+* assignments/quizzes with grading
+* certificates
+* push notifications (FCM)
+* analytics dashboard for instructors
+* refunds & disputes flow
+* localization (i18n), dark mode (on by default 😉)
+
+# 2) high-level architecture
+
+* **mobile app**: Flutter (3.x), **Riverpod** (state), **GoRouter** (routing), **Freezed** (models), **Dio** (network), **Intl** (i18n).
+* **backend**: **Supabase** (Postgres + Auth + Storage + RLS), **Edge Functions** (TypeScript) for secure server logic (webhooks, payments, email triggers).
+* **video**: use a streaming provider (e.g., Mux/Cloudflare Stream/Bunny). Upload via dashboard → get HLS URL → play with `video_player` + `chewie`. (You can start with unlisted links and tighten later.)
+* **payments**: **Paystack** checkout (in-app webview or native SDK). Supabase Edge Function validates webhook → records **orders** & **enrollments**.
+* **notifications**: Firebase Cloud Messaging (FCM), triggered by Edge Functions (e.g., new Q\&A reply, course published).
+* **analytics**: Firebase Analytics (client) + instructor revenue analytics via Postgres materialized views.
+
+# 3) data model (Supabase SQL)
+
+Run these in Supabase SQL editor (trim if you want to start smaller).
+
+```sql
+-- ===== core users =====
+create table public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text check (role in ('student','instructor','admin')) default 'student',
+  full_name text,
+  avatar_url text,
+  bio text,
+  created_at timestamptz default now()
+);
+alter table public.profiles enable row level security;
+
+create policy "users read public profiles"
+on public.profiles for select
+using (true);
+
+create policy "user updates own profile"
+on public.profiles for update
+using (auth.uid() = user_id);
+
+-- ===== courses =====
+create table public.instructors (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  headline text,
+  payout_email text,
+  created_at timestamptz default now()
+);
+alter table public.instructors enable row level security;
+create policy "self read/write instructor record"
+on public.instructors for select using (true);
+create policy "owner updates"
+on public.instructors for update using (auth.uid() = user_id);
+create policy "owner inserts"
+on public.instructors for insert with check (auth.uid() = user_id);
+
+create table public.courses (
+  id uuid primary key default gen_random_uuid(),
+  instructor_id uuid not null references public.instructors(id) on delete cascade,
+  title text not null,
+  subtitle text,
+  description text,
+  language text default 'en',
+  level text check (level in ('beginner','intermediate','advanced')) default 'beginner',
+  price_cents int default 0,
+  currency text default 'GHS',
+  thumbnail_url text,
+  promo_video_url text,
+  is_published boolean default false,
+  avg_rating numeric(3,2) default 0,
+  rating_count int default 0,
+  category text,
+  tags text[],
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table public.courses enable row level security;
+
+-- read: public can see published courses; owner can see drafts
+create policy "public reads published or owner reads"
+on public.courses for select
+using ( is_published = true or
+        exists(select 1 from public.instructors i where i.id = instructor_id and i.user_id = auth.uid()) );
+
+-- write: only owner
+create policy "owner modifies course"
+on public.courses for all
+using ( exists(select 1 from public.instructors i where i.id = instructor_id and i.user_id = auth.uid()) )
+with check ( exists(select 1 from public.instructors i where i.id = instructor_id and i.user_id = auth.uid()) );
+
+-- ===== curriculum =====
+create table public.sections (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references public.courses(id) on delete cascade,
+  title text,
+  position int
+);
+alter table public.sections enable row level security;
+create policy "read if course readable" on public.sections for select
+using ( exists(select 1 from public.courses c where c.id = course_id and
+              (c.is_published = true or
+               exists(select 1 from public.instructors i where i.id = c.instructor_id and i.user_id = auth.uid()))) );
+create policy "owner writes" on public.sections for all
+using ( exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+               where c.id = course_id and i.user_id = auth.uid()) )
+with check ( exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+                    where c.id = course_id and i.user_id = auth.uid()) );
+
+create table public.lectures (
+  id uuid primary key default gen_random_uuid(),
+  section_id uuid references public.sections(id) on delete cascade,
+  title text,
+  description text,
+  video_url text,            -- HLS URL
+  duration_seconds int,
+  is_free_preview boolean default false,
+  position int
+);
+alter table public.lectures enable row level security;
+create policy "read if course readable" on public.lectures for select
+using ( exists(select 1 from public.sections s join public.courses c on c.id=s.course_id
+              where s.id = section_id and
+               (c.is_published = true or
+                exists(select 1 from public.instructors i where i.id = c.instructor_id and i.user_id = auth.uid()))) );
+create policy "owner writes" on public.lectures for all
+using ( exists(select 1 from public.sections s join public.courses c on c.id=s.course_id
+              join public.instructors i on i.id=c.instructor_id
+              where s.id = section_id and i.user_id = auth.uid()) )
+with check ( exists(select 1 from public.sections s join public.courses c on c.id=s.course_id
+                   join public.instructors i on i.id=c.instructor_id
+                   where s.id = section_id and i.user_id = auth.uid()) );
+
+-- ===== commerce =====
+create table public.coupons (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references public.courses(id) on delete cascade,
+  code text unique not null,
+  percent_off int check (percent_off between 1 and 100),
+  expires_at timestamptz
+);
+alter table public.coupons enable row level security;
+create policy "owner read/write" on public.coupons for all
+using ( exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+               where c.id = course_id and i.user_id = auth.uid()) )
+with check ( exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+                    where c.id = course_id and i.user_id = auth.uid()) );
+
+create table public.orders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  course_id uuid references public.courses(id) on delete cascade,
+  amount_cents int not null,
+  currency text default 'GHS',
+  coupon_code text,
+  status text check (status in ('pending','paid','failed','refunded')) default 'pending',
+  paystack_ref text,
+  created_at timestamptz default now()
+);
+alter table public.orders enable row level security;
+create policy "owner reads" on public.orders for select using (auth.uid() = user_id);
+create policy "owner inserts" on public.orders for insert with check (auth.uid() = user_id);
+-- updates from server only (edge function key), no public update policy.
+
+create table public.enrollments (
+  user_id uuid references auth.users(id) on delete cascade,
+  course_id uuid references public.courses(id) on delete cascade,
+  enrolled_at timestamptz default now(),
+  primary key (user_id, course_id)
+);
+alter table public.enrollments enable row level security;
+create policy "owner reads" on public.enrollments for select using (auth.uid() = user_id);
+
+-- ===== learning progress =====
+create table public.progress (
+  user_id uuid references auth.users(id) on delete cascade,
+  lecture_id uuid references public.lectures(id) on delete cascade,
+  seconds_watched int default 0,
+  completed boolean default false,
+  updated_at timestamptz default now(),
+  primary key (user_id, lecture_id)
+);
+alter table public.progress enable row level security;
+create policy "owner read/write" on public.progress for all
+using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ===== reviews & q&a =====
+create table public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  course_id uuid references public.courses(id) on delete cascade,
+  rating int check (rating between 1 and 5),
+  comment text,
+  created_at timestamptz default now(),
+  unique (user_id, course_id)
+);
+alter table public.reviews enable row level security;
+create policy "owner reads & inserts"
+on public.reviews for select using (true);
+create policy "owner inserts"
+on public.reviews for insert with check (auth.uid() = user_id);
+
+create table public.questions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  course_id uuid references public.courses(id) on delete cascade,
+  title text,
+  body text,
+  created_at timestamptz default now()
+);
+alter table public.questions enable row level security;
+create policy "read if enrolled or owner instructor"
+on public.questions for select
+using (
+  exists(select 1 from public.enrollments e where e.course_id = course_id and e.user_id = auth.uid())
+  or exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+            where c.id = course_id and i.user_id = auth.uid())
+);
+create policy "insert if enrolled"
+on public.questions for insert with check (
+  exists(select 1 from public.enrollments e where e.course_id = course_id and e.user_id = auth.uid())
+);
+
+create table public.answers (
+  id uuid primary key default gen_random_uuid(),
+  question_id uuid references public.questions(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  body text,
+  created_at timestamptz default now()
+);
+alter table public.answers enable row level security;
+create policy "visible to enrolled or instructor" on public.answers for select
+using (
+  exists(select 1 from public.questions q where q.id = question_id and
+         (exists(select 1 from public.enrollments e where e.course_id = q.course_id and e.user_id = auth.uid())
+          or exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+                    where c.id = q.course_id and i.user_id = auth.uid())))
+);
+create policy "enrolled or instructor can answer" on public.answers for insert with check (
+  exists(select 1 from public.questions q where q.id = question_id and
+         (exists(select 1 from public.enrollments e where e.course_id = q.course_id and e.user_id = auth.uid())
+          or exists(select 1 from public.courses c join public.instructors i on i.id=c.instructor_id
+                    where c.id = q.course_id and i.user_id = auth.uid())))
+);
+
+-- ===== storage buckets =====
+-- In Supabase Storage: create buckets: 'thumbnails', 'course_assets'
+-- Example RLS-style policies (storage policies are defined in Storage UI):
+-- thumbnails: public read, owners (instructor) write
+-- course_assets: enrolled users read (signed urls), owners write
+```
+
+# 4) storage policies (concept)
+
+* **thumbnails**: public read; write limited to course owner (check via Edge Function that issues signed upload URL after verifying instructor).
+* **course\_assets**: **no** public read. App requests **signed URL** for enrolled users only. Generate via Supabase (expires \~1–6 hours).
+
+# 5) payments (Paystack) flow
+
+1. App calls Edge Function `/create-checkout` with `{ course_id, coupon? }`.
+2. Edge validates price/coupon → creates **orders** row `status='pending'` → returns Paystack init data.
+3. Flutter opens Paystack checkout (webview/native).
+4. Paystack **webhook** → Edge verifies signature → update **orders.status='paid'** and **insert enrollments**.
+5. App polls or listens (realtime) → unlocks course.
+
+> key: never trust client for enrollment. Only the webhook (server) flips it.
+
+# 6) Flutter app structure
+
+```
+lib/
+  main.dart
+  app.dart
+  core/
+    env.dart
+    router.dart
+    theme.dart
+    di.dart
+    error.dart
+  features/
+    auth/
+      data/ auth_repo.dart
+      ui/ login_page.dart signup_page.dart profile_page.dart
+    catalog/
+      data/ course_repo.dart
+      ui/ home_page.dart course_list.dart course_detail_page.dart search_page.dart
+    player/
+      data/ progress_repo.dart
+      ui/ player_page.dart lesson_tile.dart notes_sheet.dart
+    checkout/
+      data/ order_repo.dart
+      ui/ checkout_sheet.dart
+    teach/
+      data/ teach_repo.dart
+      ui/ new_course_wizard.dart section_editor.dart lecture_editor.dart
+    qa/
+      data/ qa_repo.dart
+      ui/ questions_page.dart question_thread.dart
+  widgets/
+  models/ (freezed classes)
+```
+
+* **State management**: Riverpod (`flutter_riverpod`)
+* **Routing**: GoRouter (guards: auth, instructor)
+* **Networking**: Supabase Dart SDK + Dio for extra APIs (video, Paystack webhook status check)
+* **Serialization**: Freezed + JsonSerializable
+* **Video**: `video_player` + `chewie`, HLS URL
+* **Caching**: `hive` (light local cache); downloads folder for offline (later)
+
+# 7) key screens & flows
+
+* onboarding → login/signup → home (featured, categories) → search → course detail → curriculum → preview → checkout → enrolled → player (autoplay next, remember position) → rate/review.
+* teach flow: become instructor → instructor profile → new course wizard (title, category, price) → add sections → upload assets → submit → admin review → publish.
+
+# 8) example Dart snippets
+
+**Supabase init + auth guard**
+
+```dart
+// main.dart
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: const String.fromEnvironment('SUPABASE_URL'),
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY'),
+  );
+  runApp(const App());
+}
+```
+
+```dart
+// router.dart (GoRouter)
+final router = GoRouter(
+  routes: [
+    GoRoute(path: '/', builder: (_) => const HomePage()),
+    GoRoute(path: '/login', builder: (_) => const LoginPage()),
+    GoRoute(path: '/course/:id', builder: (_, s) => CourseDetailPage(id: s.pathParameters['id']!)),
+    GoRoute(path: '/learn/:id', builder: (_, s) => PlayerPage(courseId: s.pathParameters['id']!),
+      redirect: (ctx, state) async {
+        final user = Supabase.instance.client.auth.currentUser;
+        final courseId = state.pathParameters['id']!;
+        if (user == null) return '/login';
+        final { data, error } = await Supabase.instance.client
+          .from('enrollments')
+          .select()
+          .match({'user_id': user.id, 'course_id': courseId})
+          .maybeSingle();
+        return (data == null) ? '/course/$courseId' : null;
+      }),
+  ],
+);
+```
+
+**Track watch progress**
+
+```dart
+Future<void> updateProgress(String lectureId, int seconds, bool completed) async {
+  final uid = Supabase.instance.client.auth.currentUser!.id;
+  await Supabase.instance.client.from('progress').upsert({
+    'user_id': uid,
+    'lecture_id': lectureId,
+    'seconds_watched': seconds,
+    'completed': completed,
+    'updated_at': DateTime.now().toIso8601String(),
+  });
+}
+```
+
+**Create order → open Paystack**
+
+```dart
+Future<void> startCheckout(String courseId, BuildContext context) async {
+  final res = await supabase.functions.invoke('create-checkout', body: {'course_id': courseId});
+  final checkoutUrl = res.data['authorization_url'];
+  // open in-app browser
+  await launchUrl(Uri.parse(checkoutUrl), mode: LaunchMode.inAppBrowserView);
+  // after return, hit status endpoint to refresh
+}
+```
+
+# 9) edge functions (TypeScript outlines)
+
+**create-checkout.ts**
+
+* validate user, course price, coupon
+* insert `orders` (pending)
+* call Paystack initialize transaction (server secret)
+* return `authorization_url`, `reference`
+
+**paystack-webhook.ts**
+
+* verify `x-paystack-signature`
+* find `orders` by reference → update status
+* on success: `insert into enrollments (user_id, course_id)`; send FCM via Supabase functions or callable service.
+
+# 10) search strategy
+
+* Postgres `tsvector` on title, subtitle, instructor, tags.
+* `order by`: relevance, rating, enrollments, recency.
+* Consider integrating Typesense/Meilisearch later for typo tolerance.
+
+# 11) streaming & offline
+
+* **streaming**: HLS with signed URLs from your provider. Store only the HLS URL + poster frame in DB.
+* **offline (later)**:
+
+  * create downloads table (user\_id, lecture\_id, file\_key, expires\_at).
+  * obtain time-bound signed URL to MP4 (lower-quality) and save to device storage.
+  * encrypt at rest (basic) and validate user session at app launch. (Full DRM requires heavier services.)
+
+# 12) security checklist
+
+* RLS everywhere (done above).
+* No direct public writes to orders/enrollments.
+* Validate Paystack webhooks (signature + amount + currency).
+* Sign Storage URLs, short expiries.
+* Limit file size & mime type for uploads (Edge Function).
+* Separate anon vs service keys; never ship service role in app.
+* Admin-only RPCs for publish/unpublish.
+
+# 13) analytics events (minimum)
+
+* `view_course`, `start_checkout`, `payment_success`, `payment_failed`
+* `start_lesson`, `pause_lesson`, `complete_lecture`, `complete_course`
+* `post_question`, `post_answer`, `post_review`
+* `create_course`, `publish_course`
+
+# 14) testing plan
+
+* **unit**: repos (auth, orders, progress), coupon math
+* **widget**: course list, player page controls
+* **integration**: checkout flow with mock webhook
+* **edge functions**: signature verification tests
+* **UAT**: 5–10 users complete purchase & finish a course
+
+# 15) ci/cd
+
+* **Flutter**: Fastlane or Codemagic for Android bundle & iOS IPA; build flavors: `dev`, `prod`.
+* **Supabase**: link project to Git repo; use migrations for schema; deploy Edge Functions via CI.
+* **Release**: staggered rollout on Play Store; TestFlight for iOS.
+
+# 16) app performance & ux touches
+
+* lazy-load thumbnails; cache images
+* prefetch next lecture manifest
+* resume playback from last position
+* skeleton loaders & pull-to-refresh
+* deep links: `yourapp://course/<id>`, checkout return URLs
+
+# 17) legal & ops
+
+* Terms, Privacy, Refund policy (clear timelines)
+* Instructor Agreement & Payout schedule (monthly)
+* VAT/GST handling depending on region (start simple: display tax-included prices, reconcile later)
+* Support email + in-app report
+
+# 18) milestone plan (example)
+
+**week 1–2**: auth, profile, catalog read, course detail
+**week 3**: player + progress, enrollments (free courses)
+**week 4**: Paystack checkout + webhook + paid enrollments
+**week 5**: instructor flow (create → publish)
+**week 6**: reviews, Q\&A, notifications, polish, analytics, store listing assets
+
+# 19) store assets checklist
+
+* app name, icon, feature graphics
+* screenshots (phone + tablet), promo video
+* short & long description, privacy policy URL
+* content ratings, contact email
+
+# 20) “definition of done” (mvp)
+
+* A new student can: sign up → buy → learn → get progress saved → review.
+* An instructor can: sign in → create course → upload lessons → publish → first sale recorded.
+* Admin can: approve/reject course, feature course, issue refund.
+
+---
+
+if you want, i can drop this into a **printable project checklist**, plus **ready-to-run Supabase SQL** (separate files), and a **Flutter starter repo structure** with Riverpod/GoRouter wired up — just say “make the starter pack” and i’ll generate it now.

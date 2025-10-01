@@ -1,0 +1,123 @@
+Perfect — let’s make a **full breakdown** of the **roles + permissions** for your Udemy clone. This way you’ll know exactly what each user type can and cannot do.
+
+---
+
+# 🎓 Udemy Clone – Roles & Permissions Breakdown
+
+## 🏆 1. **Super Admin (Owner)**
+
+**Full control of the platform.**
+
+* 👤 **User Management**
+
+  * Create, edit, suspend, or delete any user (instructors, students, admins).
+  * Approve/reject instructor applications.
+* 📚 **Course Management**
+
+  * Approve/reject courses before publishing.
+  * Edit or remove any course on the platform.
+  * Manage categories, tags, and course languages.
+* 💳 **Finance**
+
+  * Manage platform revenue split (e.g., 30% platform, 70% instructor).
+  * View all transactions & payouts.
+  * Handle refunds and disputes.
+* ⚙️ **Platform Settings**
+
+  * Configure branding (logo, colors, landing page).
+  * Set global platform rules (pricing tiers, promotions, coupons).
+  * Manage integrations (Paystack, email service, analytics).
+* 📊 **Analytics & Reporting**
+
+  * View full analytics (sales, enrollments, engagement, top instructors).
+
+---
+
+## 👨‍💻 2. **Admin / Moderator**
+
+**Helps manage the platform under the Super Admin.**
+
+* Approve/reject new courses (if delegated by Super Admin).
+* Review course updates submitted by instructors.
+* Moderate content (check if courses violate rules).
+* Manage support tickets from students/instructors.
+* Limited analytics (only course quality & engagement).
+* Cannot change financial settings or revenue split.
+
+---
+
+## 👩‍🏫 3. **Instructor (Course Creator)**
+
+**Manages their own courses only.**
+
+* 📚 **Course Management**
+
+  * Create, edit, and delete their own courses.
+  * Add sections, lectures, quizzes, PDFs, and assignments.
+  * Upload course thumbnail, promo video, and lecture videos.
+  * Save as draft or submit for approval.
+* 💰 **Earnings**
+
+  * Set course pricing (free or paid).
+  * View student enrollments & course revenue.
+  * Request payouts (Paystack withdrawal).
+* 📊 **Student Interaction**
+
+  * Answer student Q\&A.
+  * Respond to reviews.
+  * Send announcements/messages to students (if allowed).
+
+---
+
+## 👨‍🎓 4. **Student (Learner)**
+
+**Consumes content and engages with courses.**
+
+* 🔎 **Course Access**
+
+  * Browse/search/filter courses.
+  * View course landing page (description, reviews, instructor info).
+  * Enroll in free or paid courses.
+* 🎬 **Learning Experience**
+
+  * Watch lecture videos, read materials, take quizzes.
+  * Track progress within the course.
+  * Resume where they left off.
+* ⭐ **Engagement**
+
+  * Leave ratings & reviews.
+  * Ask questions in Q\&A (if available).
+  * Download resources (if instructor provides).
+* 🎓 **Completion**
+
+  * Receive certificate of completion (optional).
+
+---
+
+# 🔐 Permissions Matrix (Simplified View)
+
+| Action / Feature                | Super Admin | Admin       | Instructor | Student |
+| ------------------------------- | ----------- | ----------- | ---------- | ------- |
+| Create/Edit/Delete Courses      | ✅ (all)     | ✅ (any)     | ✅ (own)    | ❌       |
+| Approve/Reject Courses          | ✅           | ✅           | ❌          | ❌       |
+| Upload Course Media             | ✅ (any)     | ✅ (any)     | ✅ (own)    | ❌       |
+| Enroll in Courses               | ❌           | ❌           | ✅ (others) | ✅       |
+| Manage Users (ban/suspend)      | ✅           | ✅ (limited) | ❌          | ❌       |
+| Manage Payments & Revenue Split | ✅           | ❌           | ❌          | ❌       |
+| Request Payout                  | ❌           | ❌           | ✅ (own)    | ❌       |
+| Watch Course Content            | ❌           | ❌           | ✅ (own)    | ✅       |
+| Leave Reviews                   | ❌           | ❌           | ❌          | ✅       |
+| Analytics (global)              | ✅           | ✅ (limited) | ✅ (own)    | ❌       |
+
+---
+
+✅ With this breakdown, you have a **clear role hierarchy**:
+
+* **Super Admin = God mode**
+* **Admin = moderator**
+* **Instructor = creator**
+* **Student = consumer**
+
+---
+
+👉 Do you want me to also design the **user flow diagram (with arrows & boxes)** so you can visually present how Super Admin, Admin, Instructor, and Student interact with the system?

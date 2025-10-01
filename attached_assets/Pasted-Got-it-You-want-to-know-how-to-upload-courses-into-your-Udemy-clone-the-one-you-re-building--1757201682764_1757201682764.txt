@@ -1,0 +1,95 @@
+Got it 👍 You want to know **how to upload courses into your Udemy clone** (the one you’re building with Flutter + Supabase or React + Express). I’ll walk you through the flow step by step so you understand what’s needed both from the **backend** and the **frontend**.
+
+---
+
+## 1. Course Upload Flow (like Udemy)
+
+A typical Udemy-like platform allows instructors to:
+
+1. **Create a course** – enter title, description, category, language, price.
+2. **Upload media** – course thumbnail, promo video, and lesson videos.
+3. **Add course content** – sections, lectures, quizzes, assignments.
+4. **Publish course** – admin approval or direct publish.
+
+---
+
+## 2. Backend Requirements
+
+Depending on your stack:
+
+### If using **Supabase** (Flutter clone):
+
+* **Database tables**:
+
+  * `courses` (id, instructor\_id, title, description, price, thumbnail\_url, status)
+  * `course_sections` (id, course\_id, title, order)
+  * `lectures` (id, section\_id, title, video\_url, duration, order)
+  * `quizzes` (optional: id, lecture\_id, question, answers, correct\_answer)
+
+* **Storage (Supabase buckets)**:
+
+  * `course_thumbnails` → for images
+  * `course_videos` → for lecture videos
+
+* **RLS policies**:
+
+  * Instructors can upload/manage only their own courses.
+  * Students can only read/purchase enrolled courses.
+
+---
+
+### If using **Express + MongoDB**:
+
+* API endpoints:
+
+  * `POST /courses` → create new course
+  * `POST /courses/:id/sections` → add a section
+  * `POST /courses/:id/lectures` → upload lectures
+  * `POST /upload` → handle video/image upload (to S3, Cloudinary, or local storage)
+  * `PUT /courses/:id/publish` → publish course
+* MongoDB collections:
+
+  * `courses`, `sections`, `lectures`, `users`, `enrollments`.
+
+---
+
+## 3. Frontend (Flutter or React)
+
+* **Instructor Dashboard**:
+
+  * Form to create course (title, desc, price, category).
+  * File upload for thumbnail and promo video.
+  * UI to add sections and lectures (drag & drop or step-by-step).
+* **Upload handling**:
+
+  * Call backend or Supabase storage API to upload videos/images.
+  * Store file URLs in database.
+* **Preview & Publish**:
+
+  * Instructor can preview the course.
+  * Publish button → update course status to "published".
+
+---
+
+## 4. Video Upload Considerations
+
+* **Direct upload to Supabase storage** (for Flutter version).
+* **For Express version**:
+
+  * Use AWS S3, Cloudinary, or Firebase Storage for hosting videos (safer than local).
+  * Store returned file URL in database.
+
+---
+
+## 5. Student Side (consumption)
+
+* Students should see:
+
+  * Course landing page (details, price, reviews).
+  * Enroll button (integrated with Paystack).
+  * Course player (with video, progress tracking, notes, Q\&A).
+
+---
+
+👉 Question for you:
+Do you want me to **write out the Supabase SQL + storage policies for course upload** (so you can paste them in), or do you prefer I give you a **step-by-step Flutter UI code example** for uploading a course?

@@ -1,0 +1,72 @@
+Exactly 👍 — for a **Udemy-like clone**, you’ll need a **Super Admin (owner)** role at the top of the hierarchy.
+
+Here’s the breakdown of roles and their powers:
+
+---
+
+# 👥 Roles in Your Udemy Clone
+
+## 1. **Super Admin (Owner)**
+
+* **Full control of the platform**.
+* Responsibilities:
+
+  * Approve/reject instructors.
+  * Approve/reject courses before they go live.
+  * Manage all users (students, instructors, admins).
+  * Control platform settings (branding, categories, fees, payment gateway).
+  * Manage revenue split (e.g., 70% instructor / 30% platform).
+  * Handle disputes & refunds.
+  * Access full analytics (sales, engagement, revenue).
+
+---
+
+## 2. **Admin / Moderator (optional, under Super Admin)**
+
+* Helps manage platform day-to-day.
+* Responsibilities:
+
+  * Moderate content (check for violations).
+  * Handle student complaints.
+  * Approve basic updates from instructors.
+  * Limited access compared to Super Admin.
+
+---
+
+## 3. **Instructor (Course Creator)**
+
+* Can only manage their own courses.
+* Responsibilities:
+
+  * Create, edit, and upload courses.
+  * Upload course media (videos, PDFs, quizzes).
+  * View student enrollments & earnings (for their own courses).
+  * Withdraw funds (Paystack payout).
+
+---
+
+## 4. **Student (Learner)**
+
+* Can only enroll & consume content.
+* Responsibilities:
+
+  * Browse courses, purchase/enroll.
+  * Watch videos, complete quizzes.
+  * Leave ratings & reviews.
+  * Download resources (if allowed).
+  * Track progress & get completion certificates.
+
+---
+
+# 🔑 Role-Based Access Example (Supabase RLS / Express Middleware)
+
+* **Super Admin** → `can_do_everything`.
+* **Admin** → CRUD on courses + users (limited).
+* **Instructor** → CRUD only on own courses.
+* **Student** → Read-only access to published courses + purchase.
+
+---
+
+👉 So yes, **Super Admin is essential** — without them, there’s no control over what instructors upload (imagine anyone uploading anything like pirated movies 😅).
+
+Would you like me to **map this out as a permissions matrix** (a table of who can do what) so it’s crystal clear?

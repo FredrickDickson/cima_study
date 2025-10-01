@@ -1,0 +1,98 @@
+Perfect question 👌 — the **user flow** is the most important part, because it shows how instructors and students interact with your Udemy clone. Let’s break it down clearly:
+
+---
+
+# 🎬 Udemy Clone User Flow
+
+## 👩‍🏫 Instructor Flow (Course Creator)
+
+1. **Sign Up / Log In**
+
+   * Instructor registers or logs in.
+   * Profile completion (bio, expertise, verification if required).
+
+2. **Create New Course**
+
+   * Click **“Create Course”** button.
+   * Fill in basic info: *course title, subtitle, description, category, language, difficulty level*.
+
+3. **Upload Media**
+
+   * Upload **course thumbnail** (image).
+   * Upload **promo video** (optional).
+
+4. **Add Content**
+
+   * Create **Sections (Modules)** → e.g. *Introduction, Advanced Topics*.
+   * Inside each section → add **Lectures** (upload video + description).
+   * Optionally → add **quizzes, PDFs, assignments, downloadable files**.
+
+5. **Set Pricing & Publish**
+
+   * Choose price (free or paid).
+   * Save draft or submit for publishing.
+   * If admin approval required → status = *pending*.
+   * Once approved → course goes live in catalog.
+
+---
+
+## 👨‍🎓 Student Flow (Learner)
+
+1. **Browse Courses**
+
+   * Explore catalog by category, search, filters.
+   * Click on course → see **landing page** (title, instructor, reviews, preview video, curriculum, price).
+
+2. **Purchase/Enroll**
+
+   * If paid → checkout with **Paystack** (or other gateway).
+   * If free → instant enroll.
+   * Enrollment record saved in DB.
+
+3. **Access Course**
+
+   * Course added to **“My Courses”** dashboard.
+   * Open course → video player with sidebar showing sections & lectures.
+   * Track progress (watched %, completed quizzes).
+
+4. **Engage**
+
+   * Leave ratings & reviews.
+   * Ask questions in Q\&A (if implemented).
+   * Download resources (if allowed).
+
+5. **Complete Course**
+
+   * Once all lectures/quizzes completed → mark course as **completed**.
+   * Optional: auto-generate **certificate of completion**.
+
+---
+
+## 👨‍💻 Admin Flow (Platform Owner)
+
+1. **Log In**
+
+   * Access **Admin Dashboard**.
+
+2. **Course Moderation**
+
+   * Review pending courses.
+   * Approve or reject based on quality/content.
+
+3. **Platform Management**
+
+   * Manage users (students + instructors).
+   * See revenue, analytics, and reports.
+   * Handle refund requests or disputes.
+
+---
+
+# 🔑 Summary
+
+* **Instructor flow** → Create course → Upload videos → Add content → Publish.
+* **Student flow** → Browse → Enroll → Learn → Complete.
+* **Admin flow** → Approve courses → Manage users & payments.
+
+---
+
+👉 Do you want me to **draw this out as a visual flowchart (arrows, steps, roles)** so you can use it in your project documentation / pitch deck?
